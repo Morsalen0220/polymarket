@@ -46,10 +46,10 @@ load_dotenv()
 
 ALCHEMY_URL = os.getenv("ALCHEMY_URL")
 if not ALCHEMY_URL:
-    raise Exception("ALCHEMY_URL missing")
+    raise RuntimeError("ALCHEMY_URL missing")
 
 w3 = Web3(Web3.HTTPProvider(ALCHEMY_URL))
-assert w3.is_connected()
+assert w3.is_connected(), "Polygon RPC not connected"
 
 USDC_ADDRESS = Web3.to_checksum_address(
     "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
@@ -73,7 +73,7 @@ async def phase_b_loop():
         except Exception as e:
             logging.error(f"Phase-B error: {e}")
 
-        await asyncio.sleep(3600)  # 1 hour
+        await asyncio.sleep(3600)  # every 1 hour
 
 # =========================
 # MAIN WHALE LOOP (SILENT)
