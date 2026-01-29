@@ -1,0 +1,113 @@
+import os
+import time
+from web3 import Web3
+from dotenv import load_dotenv
+
+from clob_decoder import decode_block_polymarket_trades
+from tx_decoder import decode_polymarket_tx
+from telegram import send_signal
+
+# --------------------
+# CONFIG
+# --------------------
+WHALE_THRESHOLD = 2000  # USD
+POLL_DELAY = 1  # seconds
+
+# --------------------
+# ENV + WEB3
+# --------------------
+load_dotenv()
+
+ALCHEMY_URL = os.getenv("ALCHEMY_URL")
+if not ALCHEMY_URL:
+    raise Exception("❌ ALCHEMY_URL missing in .env")
+
+w3 = Web3(Web3.HTTPProvider(ALCHEMY_URL))
+assert w3.is_connected(), "❌ Failed to connect to Polygon RPC"
+
+USDC_ADDRESS = Web3.to_checksum_address(
+    "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+)
+
+print("🚀 POLYMARKET WHALE SIGNAL BOT (PHASE-A ENABLED)")
+
+# start a little behind head
+last_scanned_block = w3.eth.block_number - 2
+
+# --------------------
+# MAIN LOOP
+# --------------------
+while True:
+    try:
+        latest_block = w3.eth.block_number
+        target_block = latest_block - 1
+
+        if target_block <= last_scanned_block:
+            time.sleep(POLL_DELAY)
+            continue
+
+        # fetch USDC logs only (fast + cheap)
+        logs = w3.eth.get_logs({
+            "fromBlock": target_block,
+            "toBlock": target_block,
+            "address": USDC_ADDRESS
+        })
+
+        # detect confirmed Polymarket trades (TX-level)
+        trades = decode_block_polymarket_trades(logs)
+
+        for trade in trades:
+            usd_size = trade["usd_size"]
+            if usd_size < WHALE_THRESHOLD:
+                continue
+
+            tx_hash = trade["tx_hash"]
+
+            # --------------------
+            # PHASE-A: TX calldata decode
+            # --------------------
+            tx_info = decode_polymarket_tx(w3, tx_hash)
+            if not tx_info:
+                # could not decode tokenId/side → skip
+                continue
+
+            side = tx_info["side"]
+            token_id = tx_info["token_id"]
+            function = tx_info["function"]
+
+            # --------------------
+            # TELEGRAM SIGNAL
+            # --------------------
+            send_signal(
+                trade={
+                    "side": side,
+                    "usd_size": usd_size
+                },
+                market={
+                    "question": f"Polymarket Token ID {token_id}",
+                    "price": 0
+                },
+                trader=trade["trader"],
+                tx_hash=tx_hash,
+                note=(
+                    f"🐋 Confirmed Polymarket whale trade\n"
+                    f"🧠 Function: {function}\n"
+                    f"🆔 Token ID: {token_id}"
+                )
+            )
+
+            print(
+                f"🐋 SIGNAL SENT | ${usd_size} | "
+                f"{side} | tokenId={token_id} | {tx_hash[:10]}…"
+            )
+
+        last_scanned_block = target_block
+        time.sleep(POLL_DELAY)
+
+    except KeyboardInterrupt:
+        print("\n🛑 Bot stopped manually")
+        break
+
+    except Exception as e:
+        print("⚠️ Runtime error:", e)
+        time.sleep(3)
