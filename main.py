@@ -1,5 +1,13 @@
 # main.py
 
+import logging
+
+logging.getLogger().setLevel(logging.WARNING)
+logging.getLogger("web3").setLevel(logging.ERROR)
+logging.getLogger("google").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+
+
 import os
 import time
 import asyncio
