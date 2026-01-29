@@ -1,7 +1,7 @@
 # signal_repo.py
 
-from db import db
 from datetime import datetime
+from db import get_db
 
 COLLECTION = "trades"
 
@@ -17,25 +17,31 @@ def save_trade(
     side="UNKNOWN",
     is_fallback=False,
 ):
+    """
+    Save a trade to Firestore (Phase-A + Phase-B compatible)
+    """
+    db = get_db()
+
     trade = {
-        "txHash": tx_hash,
+        "tx_hash": tx_hash,
         "trader": trader.lower(),
-        "usdcAmount": usdc_amount,
-        "blockNumber": block_number,
+        "usdc_amount": usdc_amount,
+        "block_number": block_number,
         "timestamp": timestamp,
-        "marketId": market_id,
-        "tokenId": token_id,
+        "market_id": market_id,
+        "token_id": token_id,
         "side": side,
-        "isFallback": is_fallback,
+        "is_fallback": is_fallback,
         "resolved": False,
         "outcome": None,
-        "createdAt": datetime.utcnow(),
+        "created_at": datetime.utcnow(),
     }
 
     db.collection(COLLECTION).document(tx_hash).set(trade)
 
 
 def get_unresolved_trades():
+    db = get_db()
     return (
         db.collection(COLLECTION)
         .where("resolved", "==", False)
@@ -44,11 +50,12 @@ def get_unresolved_trades():
 
 
 def mark_trade_resolved(tx_hash, outcome, result):
+    db = get_db()
     db.collection(COLLECTION).document(tx_hash).update(
         {
             "resolved": True,
             "outcome": outcome,
             "result": result,
-            "resolvedAt": datetime.utcnow(),
+            "resolved_at": datetime.utcnow(),
         }
     )

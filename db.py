@@ -5,54 +5,53 @@ import json
 import time
 import firebase_admin
 from firebase_admin import credentials, firestore
-from dotenv import load_dotenv
 
-load_dotenv()
+_db = None
+
 
 # =========================
 # FIREBASE INIT
 # =========================
-_db = None
-
 def init_db():
     global _db
     if _db:
         return _db
 
-    # Option 1: local serviceAccountKey.json
+    # Prevent double init
+    if firebase_admin._apps:
+        _db = firestore.client()
+        return _db
+
+    # Local dev
     if os.path.exists("serviceAccountKey.json"):
         cred = credentials.Certificate("serviceAccountKey.json")
 
-    # Option 2: env variable (Render / prod)
+    # Render / prod
     else:
         firebase_json = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         if not firebase_json:
-            raise Exception("❌ Firebase credentials not found")
+            raise Exception("❌ FIREBASE_SERVICE_ACCOUNT env missing")
 
         cred = credentials.Certificate(json.loads(firebase_json))
 
-    if not firebase_admin._apps:
-        firebase_admin.initialize_app(cred)
-
+    firebase_admin.initialize_app(cred)
     _db = firestore.client()
     print("✅ Firebase Firestore connected")
     return _db
 
 
 # =========================
-# EXPORT DB HANDLE
+# HELPERS
 # =========================
-db = init_db()
+def get_db():
+    return init_db()
+
 
 # ==========================================================
-# TRADE FUNCTIONS (LEGACY SAFE + PHASE-B COMPATIBLE)
+# TRADE FUNCTIONS
 # ==========================================================
-
 def save_trade(trade: dict):
-    """
-    Legacy-compatible trade save.
-    Accepts dict and stores directly.
-    """
+    db = get_db()
     trade["timestamp"] = trade.get("timestamp", int(time.time()))
     db.collection("trades").document(trade["tx_hash"]).set(trade)
 
@@ -60,8 +59,8 @@ def save_trade(trade: dict):
 # ==========================================================
 # TRADER FUNCTIONS
 # ==========================================================
-
 def update_trader(trader_address, usd_size):
+    db = get_db()
     trader_address = trader_address.lower()
     ref = db.collection("traders").document(trader_address)
     snap = ref.get()
@@ -85,9 +84,7 @@ def update_trader(trader_address, usd_size):
 
 
 def update_trader_stats(trader_address, result):
-    """
-    Phase-B win/loss updater
-    """
+    db = get_db()
     trader_address = trader_address.lower()
     ref = db.collection("traders").document(trader_address)
     snap = ref.get()
@@ -112,6 +109,7 @@ def update_trader_stats(trader_address, result):
 
 
 def get_trader_stats(trader_address):
+    db = get_db()
     trader_address = trader_address.lower()
     snap = db.collection("traders").document(trader_address).get()
 
@@ -133,6 +131,7 @@ def get_trader_stats(trader_address):
 
 
 def get_top_traders(limit=50):
+    db = get_db()
     docs = (
         db.collection("traders")
         .order_by("total_usd", direction=firestore.Query.DESCENDING)

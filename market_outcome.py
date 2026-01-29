@@ -1,22 +1,34 @@
 # market_outcome.py
 
-from db import db
+from datetime import datetime
+from db import get_db
 
 COLLECTION = "market_outcomes"
 
 
 def save_market_outcome(market_id, outcome):
     """
-    outcome: YES / NO
+    Save resolved market outcome
     """
-    db.collection(COLLECTION).document(market_id).set({
-        "marketId": market_id,
-        "outcome": outcome
-    })
+    db = get_db()
+
+    data = {
+        "market_id": market_id,
+        "outcome": outcome,
+        "resolved_at": datetime.utcnow()
+    }
+
+    db.collection(COLLECTION).document(str(market_id)).set(data)
 
 
-def get_market_outcome(market_id):
-    snap = db.collection(COLLECTION).document(market_id).get()
-    if not snap.exists:
+def fetch_market_outcome(market_id):
+    """
+    Fetch market outcome if exists
+    """
+    db = get_db()
+    doc = db.collection(COLLECTION).document(str(market_id)).get()
+
+    if not doc.exists:
         return None
-    return snap.to_dict().get("outcome")
+
+    return doc.to_dict()
